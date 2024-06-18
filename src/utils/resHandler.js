@@ -7,3 +7,5 @@ class resHandler{
 
     }
 }
+
+export {resHandler}
