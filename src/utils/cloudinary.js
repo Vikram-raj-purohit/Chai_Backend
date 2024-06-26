@@ -11,17 +11,19 @@ import fs from 'fs'
     });
 
 // Upload an image
-const uploadOnCloudinary = async (localfilepath)=>{
+const uploadOnCloudinary = async (localFilePath)=>{
+  
 
     try {
-        if(!localfilepath) return null
-        const response =  await cloudinary.uploader.upload(localfilepath,{resource_type:'auto'} )
+        if(!localFilePath) return null
+        const response =  await cloudinary.uploader.upload(localFilePath,{resource_type:'auto'} )
 
-         console.log('File is uploaded on cloudinary.',response.url)
+        //  console.log('File is uploaded on cloudinary.',response.url)
+         fs.unlinkSync(localFilePath)
          return response
 
 }catch(error){
-    fs.unlinkSync(localfilepath) //remove the locally saved temprary files
+    fs.unlinkSync(localFilePath) //remove the locally saved temprary files
     return null 
     
 }
