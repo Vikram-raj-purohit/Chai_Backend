@@ -5,6 +5,7 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import { json } from "express"
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose"
 
 const generateAccessAndRefreshToken = async(userId)=>{
     try {
@@ -198,9 +199,244 @@ const refreshAccessToken = asyncHandler(async(req, res)=>{
     }
 })
 
+const changeCurrentPassword = asyncHandler(async(req,res)=>{
+    const {oldPassword, newPassword} = req.body
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = user.isPasswordCorrect(oldPassword)
+    if (!isPasswordCorrect) {
+        throw new ApiError(400, "Old Password is incorrect")
+        }
+        user.password = newPassword
+        await user.save({validateBeforeSave:false})
+        return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Password Changed Successfully"))
+
+})
+
+const currentUser = asyncHandler(async(req, res)=>{
+    return res
+    .status(200).json(req.user, "Current User details fetched successfully.")
+
+})
+
+const updateUserDetail = asyncHandler(async(req, res)=>{
+    const {fullName, email} = req.body
+    if(!fullName || !email){
+        throw new ApiError(400, "Please provide all the details")
+
+    }
+    const user =  await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                fullName:fullName,
+                email:email
+            }
+        },
+        {
+            new:true
+        }
+
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User details updated successfully."))
+    
+    
+
+})
+
+const updateUserAvatar = asyncHandler(async(req,res)=>{
+   
+    const localAvatarPath = req.file?.path
+
+    if (!localAvatarPath) {
+        throw new ApiError(401, "Avatar file is missing")
+    }
+
+    const avatar = await uploadOnCloudinary(localAvatarPath) 
+    if (!avatar.url) {
+        throw new ApiError(401, "Error while uploading the avatar file")
+    }
+
+   const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set: {
+                avatar: avatar.url
+                }
+        },{
+            new:true
+        }
+    ).select("-password")
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "User avatar updated successfully."))
+    
+   
+})
+
+const updateUserCoverImage = asyncHandler(async(req,res)=>{
+   
+    const localCoverImagePath = req.file?.path
+
+    if (!localCoverImagePath) {
+        throw new ApiError(401, "Cover image file is missing")
+    }
+
+    const coverImage = await uploadOnCloudinary(localCoverImagePath) 
+    if (!coverImage.url) {
+        throw new ApiError(401, "Error while uploading the cover image file")
+    }
+
+    const user = await User.findByIdAndUpdate(req.user?._id,
+        {
+            $set: {
+                coverImage: coverImage.url
+                }
+        },{
+            new:true
+        }
+    ).select("-password")
+    
+   return res
+   .status(200)
+   .json(new ApiResponse(200, user, "User cover image updated successfully."))
+
+})
+
+const getChennalUserProfile = asyncHandler(async(req, res)=>{
+    const {username}  = req.params()
+
+    if (!username?.trim()) {
+        throw new ApiError(400, 'Username does not exist')
+    }
+
+   const chennal =  await User.aggregate(
+        [
+            {
+                $match: {
+                    username: username?.toLowerCase()
+                    }
+            },
+            {
+                $lookup:{
+                    from: "Subscriptions",
+                    localField: "_id",
+                    foreignField: "chennal",
+                    as: "subscripbers"
+                }
+            },{
+                $lookup:{
+                    from: "Subscriptions",
+                    localField: "_id",
+                    foreignField: "subscriber",
+                    as: "subscribedTo"
+                }
+            },
+            {
+                $addFields:{
+                    subscripbersCount:{$size:"$subscripbers"},
+                    chennalsSubscribedToCount:{$size:"$subscribedTo"},
+                    isSubscribed:{$cond:{
+                        if:{$in:[req.user?._id, "$subscripbers.subscriber"]},
+                        then:true,
+                        else:false
+                    }}
+                }
+            },
+            {
+                $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                    coverImage: 1,
+                    subscripbersCount: 1,
+                    chennalsSubscribedToCount: 1,
+                    isSubscribed: 1,
+                    email:1
+
+                    }
+            }
+                
+    ]
+)
+    if (!chennal?.length) {
+        throw new ApiError(404, "Chennal does not exist.")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, chennal[0], 'User chennal fetched successfully.')
+    )
+
+})
+
+const getWatchHistory = asyncHandler(async(req,res)=>{
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user?._id)
+            }
+        }
+        ,
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline:[{
+                    $lookup:{
+                        from:"users",
+                        localField:"owner",
+                        foreignField:"_id",
+                        as:"owner",
+                        pipeline:[
+                            {
+                                $project: {
+                                    fullName: 1,
+                                    avatar: 1,
+                                    username: 1,
+                                    
+                                    }
+                                    }
+                                    ]
+
+                    }
+                },
+                {
+                   $addFields:{
+                    owner:{$arrayElemAt:["$owner",0]}
+                   }
+                }
+                        
+            ]
+        }
+    }
+    ])
+
+    return res
+    .status(200)
+    .json( new ApiResponse(200, user[0].watchHistory,'Watch history fetched successfully.'))
+})
+
+
 export {
     registerUser, 
     loginUser,
     userLogOut,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    currentUser,
+    updateUserDetail,
+    updateUserAvatar,
+    updateUserCoverImage,
+    getChennalUserProfile,
+    getWatchHistory
+
+
 }
