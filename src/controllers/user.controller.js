@@ -167,14 +167,15 @@ const userLogOut = asyncHandler(async(req, res)=>{
 
 const refreshAccessToken = asyncHandler(async(req, res)=>{
     const incommingRefreshToken = req.cookies.refreshToken || req.body.refreshToken 
-
+    
     if (!incommingRefreshToken) {
         throw new ApiError(401,"Unauthorized request")
     }
 
     try {
-        const decodedToken = jwt.verify(incommingRefreshToken, process.eng.REFRESH_TOKEN_SECRET)
+        const decodedToken = jwt.verify(incommingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
         const user = await User.findById(decodedToken?._id)
+   
         if (!user) {
             throw new ApiError(401, "Invalid Refresh Token")
             }
@@ -203,7 +204,7 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
     const {oldPassword, newPassword} = req.body
 
     const user = await User.findById(req.user?._id)
-    const isPasswordCorrect = user.isPasswordCorrect(oldPassword)
+    const isPasswordCorrect = user.isPassword(oldPassword)
     if (!isPasswordCorrect) {
         throw new ApiError(400, "Old Password is incorrect")
         }
@@ -217,13 +218,13 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 
 const currentUser = asyncHandler(async(req, res)=>{
     return res
-    .status(200).json(req.user, "Current User details fetched successfully.")
+    .status(200).json(new ApiResponse(200,req.user, "Current User details fetched successfully."))
 
 })
 
 const updateUserDetail = asyncHandler(async(req, res)=>{
     const {fullName, email} = req.body
-    if(!fullName || !email){
+    if(!(fullName || email)){
         throw new ApiError(400, "Please provide all the details")
 
     }
@@ -308,7 +309,7 @@ const updateUserCoverImage = asyncHandler(async(req,res)=>{
 })
 
 const getChennalUserProfile = asyncHandler(async(req, res)=>{
-    const {username}  = req.params()
+    const {username}  = req.params
 
     if (!username?.trim()) {
         throw new ApiError(400, 'Username does not exist')
